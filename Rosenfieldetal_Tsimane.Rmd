@@ -1,0 +1,533 @@
+---
+title: "Main analyses for 'Sexual selection for low male voice pitch among Amazonian forager-horticulturists'"
+author: "Kevin A. Rosenfield"
+date: "October 17, 2018"
+output: html_document
+---
+
+```{r set-options, echo=FALSE, cache=FALSE}
+options(width = 120)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This R Markdown file comprehensively documents the steps taken in data treatment and analysis for Rosenfield et al. 2018 "Sexual selection for low male voice pitch among Amazonian forager-horticulturists"
+
+This is the MAIN ANALYSIS Markdown file. For documentation of the robustness checks or study 2 full model results, please see (URL HERE) or (URL HERE), respectively.
+
+```{r tsimane1 load packages, message=FALSE}
+library(lmerTest); library(tidyverse); library(ggplot2); library(ggsignif); library(FSA); library(lme4); library(FactoMineR); library(psych); library(GPArotation); library(lattice); library(MASS); library(gridExtra); library(vcd); library(qpcR);library(QuantPsyc)
+```
+
+
+## Study 1
+#### Read in and preview study 1 data; change some factor variables to numeric, separate into two data frames by subjcet sex
+    
+```{r Tsimane1 read in, warning=FALSE}
+Tsimane_study1 <- read.csv("Rosenfieldetal_Study1.csv")
+
+cols.num <- c(5:12)
+
+Tsimane_study1[cols.num] <- sapply(sapply(Tsimane_study1[cols.num],as.character),as.numeric); rm(cols.num)
+
+Tsimane_study1.vert <- Tsimane_study1 %>%
+  tidyr::gather(key = condition, value = num_chosen, -ID, -sex, -age, -village) %>%
+  tidyr::separate(condition, into = c("char", "manip"), sep="_")
+
+Tsimane_study1_women <- Tsimane_study1.vert %>%
+  filter (is.na(num_chosen) == F) %>%
+  filter (sex == 0) %>%
+  dplyr::select (ID, char, manip, num_chosen)
+
+Tsimane_study1_men <- Tsimane_study1.vert %>%
+  filter (is.na(num_chosen) == F) %>%
+  filter (sex == 1) %>%
+  dplyr::select (ID, char, manip, num_chosen)
+```
+
+<br>
+
+Preview male and female subjects' dataframes
+```{r tsimane1 robust preview, echo=FALSE, warning=FALSE}
+head(Tsimane_study1_men)
+head(Tsimane_study1_women)
+```
+###### char (characteristic rated): pre = prestige; dom = dominance; att = body attractiveness;   mar = marraige
+###### manip (type of manipulation)  mas = masculinized;   fem = feminized
+###### num_chosen: number of more masculine stimuli (out of 4)
+
+<br>
+
+repeated measures ANOVAs testing whether female subjects' responses differed based on characteristic rated or manipulation type
+```{r, tsimane1 repeated measures women, warning=FALSE}
+anova(lmer(num_chosen ~ char*manip + (1|ID), data=Tsimane_study1_women))
+```
+###### no differences based on characteristic, manipulation, or their interaction
+
+<br>
+
+repeated measures ANOVAs testing whether male subjects' responses differed based on characteristic rated or manipulation type
+```{r, tsimane1 repeated measures men, warning=FALSE}
+anova(lmer(num_chosen ~ char*manip + (1|ID), data=Tsimane_study1_men))
+```
+###### men's responses do not differ depending on type of manipulation but DO differ whether they are rating dominance or prestige
+
+<br>
+
+Graph men's and women's number of masculiune stimuli chosen under 4 conditions after some data wrangling
+```{r tsimane1 graph 4 conditions by sex}
+Tsimane_study1_men_plot.data <- Tsimane_study1 %>%
+  tidyr::gather(key = condition, value = num_chosen, -ID, -sex, -age, -village) %>%
+  filter (sex == 1) %>%  
+  filter (is.na(num_chosen) == F) %>%
+  dplyr::select (ID, condition, num_chosen)
+
+Tsimane_study1_women_plot.data <- Tsimane_study1 %>%
+  tidyr::gather(key = condition, value = num_chosen, -ID, -sex, -age, -village) %>%
+  filter (sex == 0) %>%  
+  filter (is.na(num_chosen) == F) %>%
+  dplyr::select (ID, condition, num_chosen)
+
+men_conditions <- ggplot(Tsimane_study1_men_plot.data, aes(condition, num_chosen)) + coord_flip() +
+  theme(axis.title.y = element_text(hjust = 5)) + ylim(-0.6, 5.7) +
+  labs(title = "Numbers of more masculine stimuli chosen, grouped by condition\n",
+       subtitle = "Men", x="", y="") +
+  scale_x_discrete(breaks=c("dom_fem", "dom_mas", "pre_fem", "pre_mas"),
+                   labels=c("Dominance\nfeminized ", "Dominance\nmasculinized ",
+                            "Prestige\nfeminized ", "Prestige\nmasculinized ")) +
+  geom_violin(aes(fill = condition)) + stat_summary(fun.y=mean, geom="point", shape=18, size=6, color="white") +
+  geom_line(data = data.frame(x = c(0,4.5), y = c(2,2)),
+            aes(x = x, y = y), colour = "red", linetype="dashed", size = 1.3) +
+  geom_jitter(height = 0.15, width = .25, color = 'black', shape = 1, size = 2.5) +
+  scale_fill_manual(values = c("#B2ABD2", "#5E3C99", "#FDB863", "#E66101")) + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5), plot.margin =
+                            margin(0.3, 0.3, 0, 0.3, "cm"), legend.position="none")  +
+  geom_signif(y_position=c(4.45), xmin=c(1.5), xmax=c(3.5),
+              annotation=c("p < 0.001"), vjust = 2.7, hjust = -0.4, tip_length = 0.035) +
+  geom_signif(y_position=c(4.3, 4.3), xmin=c(1, 3), xmax=c(2, 4),
+              annotation=c("", ""), tip_length = 0.03)
+
+
+women_conditions <- ggplot(Tsimane_study1_women_plot.data, aes(condition, num_chosen)) + coord_flip() +
+  theme(axis.title.y = element_text(hjust = 5)) + ylim(-0.6, 5.7) + labs(subtitle = "Women", x="", y="") +
+  scale_x_discrete(breaks=c("att_fem", "att_mas", "mar_fem", "mar_mas"),
+                   labels=c("Attractiveness\nfeminized ", "Attractiveness\nmasculinized ",
+                            "Marraige\nfeminized ", "Marraige\nmasculinized ")) +
+  geom_violin(aes(fill = condition)) + stat_summary(fun.y=mean, geom="point", shape=18, size=6, color="white") +
+  geom_line(data = data.frame(x = c(0,4.5), y = c(2,2)),
+            aes(x = x, y = y), colour = "red", linetype="dashed", size = 1.3) +
+  geom_jitter(height = 0.15, width = .25, color = 'black', shape = 1, size = 2.5) +
+  scale_fill_manual(values = c("#B2ABD2", "#5E3C99", "#FDB863", "#E66101")) +
+  theme_classic() + theme(plot.margin = margin(0.2, 0.3, 0.3, 0.3, "cm"), legend.position="none") +
+  geom_signif(y_position=c(4.45), xmin=c(1.5), xmax=c(3.5),
+              annotation=c("ns"), vjust = 2.9, hjust = -1.5, tip_length = 0.035) +
+  geom_signif(y_position=c(4.3, 4.3), xmin=c(1, 3), xmax=c(2, 4),
+              annotation=c("", ""), tip_length = 0.03)
+
+grid.arrange(men_conditions, women_conditions, nrow=2, left = "Condition")
+```
+
+###### horizontal jitter applied to data points for ease of viewing; in reality, the num_chosen variable is discrete
+###### large white diamonds represent means; dotted red line indicates line of no preference
+
+<br>
+
+### Did subjects choose stimuli manipulated away from mean F0 at a rate that differs from chance?
+
+<br>
+
+Men
+```{r tsimane1 manipulated male}
+Tsimane_study1_men_manip <- Tsimane_study1_men %>%
+  mutate(manip_chosen = 
+           case_when(
+           manip == "fem" ~ 4 - num_chosen,
+           manip == "mas" ~ num_chosen
+         )) %>%
+  group_by(ID) %>%
+  summarize(avg_manip = mean(manip_chosen))
+t.test(Tsimane_study1_men_manip$avg_manip, mu=2, paired=FALSE, no.action=na.omit)
+```
+###### male subjects' rates of choosing stimuli manipulated away from the mean did not differ from chance
+
+<br>
+
+Women
+```{r tsimane1 manipulated female}
+Tsimane_study1_women_manip <- Tsimane_study1_women %>%
+  mutate(manip_chosen = 
+           case_when(
+             manip == "fem" ~ 4 - num_chosen,
+             manip == "mas" ~ num_chosen
+           )) %>%
+  group_by(ID) %>%
+  summarize(avg_manip = mean(manip_chosen))
+t.test(Tsimane_study1_women_manip$avg_manip, mu=2, paired=FALSE, no.action=na.omit)
+```
+###### female subjects' rates of choosing stimuli manipulated away from the mean did not differ from chance
+
+<br>
+<br>
+
+##### based on the above analyses indicating that women answered similarly in all conditions and that men answer differently in prestige vs. dominance conditions:
+
+##### make data frames for women's overall mean num_chosen, men's mean num_chosen for dominance, and men's mean num_chosen for prestige
+```{r, tsimane1 seperate by conditions}
+Tsimane_study1_women_avg <- Tsimane_study1_women %>%
+  group_by (ID) %>%
+  summarize(avg_chosen = mean(num_chosen))
+
+Tsimane_study1_men_pre_avg <- Tsimane_study1_men %>%
+  filter (is.na(num_chosen) == F) %>%
+  filter (char == "pre") %>%
+  dplyr::select (ID, char, num_chosen) %>%
+  group_by (ID, char) %>%
+  summarize(avg_chosen = mean(num_chosen))
+
+Tsimane_study1_men_dom_avg <- Tsimane_study1_men %>%
+  filter (is.na(num_chosen) == F) %>%
+  filter (char == "dom") %>%
+  dplyr::select (ID, char, num_chosen) %>%
+  group_by (ID, char) %>%
+  summarize(avg_chosen = mean(num_chosen))
+```
+
+<br>
+
+#### 1-sample t-tests: Does number of masculine stimuli selected differ from chance?
+
+<br>
+
+women (all conditions combined)
+```{r, tsimane1 wilcox test women, warning=FALSE}
+t.test(Tsimane_study1_women_avg$avg_chosen, mu = 2, paired=FALSE, no.action=na.omit)
+```
+###### women chose significantly fewer masculine stimuli than would be expected by chance
+
+<br>
+
+men-prestige
+```{r, tsimane1 wilcox test men prestige, warning=FALSE}
+t.test(Tsimane_study1_men_pre_avg$avg_chosen, mu = 2, paired=FALSE, no.action=na.omit)
+```
+###### men did not choose a number of masculine stimuli that differs from chance in "prestige" conditions
+
+<br>
+
+men-dominance
+```{r, tsimane1 wilcox test men dominance, warning=FALSE}
+t.test(Tsimane_study1_men_dom_avg$avg_chosen, mu = 2, paired=FALSE, no.action=na.omit)
+```
+###### men chose significantly more masculine stimuli than would be expected by chance in dominance conditions
+
+
+Cohen's d (effect size) for perceptions of dominance of masculine vs feminine stimuli
+```{r tsimane1 effect size dominance}
+(2-mean(Tsimane_study1_men_dom_avg$avg_chosen)) / sd(Tsimane_study1_men_dom_avg$avg_chosen)
+```
+
+
+<br>
+
+Graph women's overall average number of masculiune stimuli chosen and men's averages for prestige and dominance separately
+```{r, tsimane1 graph women, men-prestige, and men-dominance, warning=FALSE}
+Tsimane_study1_women_avg_dummy <- rbind(Tsimane_study1_women_avg[,2], NA, NA, NA, NA, NA, NA)
+
+figure_2.data <- cbind(c(1:45), Tsimane_study1_women_avg_dummy[,1], Tsimane_study1_men_dom_avg[,3],
+                       Tsimane_study1_men_pre_avg[,3])
+
+colnames(figure_2.data) <-  c("ID", "women", "men_dom", "men_pre")
+figure_2.data$ID <- as.factor(figure_2.data$ID)
+
+figure_2.data.vert <- figure_2.data %>%
+  tidyr::gather(key = group, value = avg_chosen, -ID)
+
+
+ggplot(figure_2.data.vert, aes(group, avg_chosen)) + coord_flip() + theme(axis.title.y = element_text(hjust = 5)) +
+  labs( title = "Numbers of more masculine stimuli chosen\n", x="Group", y="Average number chosen") +
+  scale_x_discrete(breaks=c("women", "men_dom", "men_pre"),
+                   labels=c("Women ", "Men\ndominance ", "Men\nprestige ")) +
+  geom_violin(aes(fill = group)) + stat_summary(fun.y = mean, geom="point", color = "white", size = 5) +
+  geom_line(data = data.frame(x = c(0,4.5), y = c(2,2)),
+            aes(x = x, y = y), colour = "red", linetype="dashed", size = 1.3) +
+  geom_jitter(height = 0.1, width = .15, color = 'black', shape = 1, size = 2.5) +
+  scale_fill_brewer(palette="Pastel1") + theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5), plot.margin = margin(0.2, 0.3, 0.3, 0.3, "cm"), legend.position="none") + 
+  geom_signif(y_position=c(4.4, 4.2, 3), xmin=c(0.9, 1.9, 2.9), xmax=c(0.9, 1.9, 2.9),
+              annotation=c("p<0.001", "ns", "p<0.001"), tip_length = 0)
+```
+
+###### horizontal jitter applied to data points for ease of viewing; in reality, the num_chosen variable is discrete
+###### large white dots represent means; dotted red line indicates no preference
+
+<br>
+
+## Study 2
+
+Read in study 2 data; change some numeric variables to factors; exclude men who have never married
+```{r Tsimane2 read in, warning=FALSE}
+Tsimane_study2 <- read.csv("Rosenfieldetal_Study2.csv")
+Tsimane_study2$ID <- as.factor(Tsimane_study2$ID)
+Tsimane_study2$village <- as.factor(Tsimane_study2$village)
+Tsimane_study2$men_outlier <- rep(0,68)
+Tsimane_study2$wife_outlier <- rep(0,68)
+Tsimane_study2_outlierm <- Tsimane_study2 %>%
+  filter (Tsimane_study2$ID == 164) %>%
+  mutate(men_outlier=replace(men_outlier, , 1))
+Tsimane_study2_outlierw <- Tsimane_study2 %>%
+  filter (Tsimane_study2$ID == 10) %>%
+  mutate(wife_outlier=replace(wife_outlier, , 1))
+Tsimane_study2 <- rbind(Tsimane_study2[ which(Tsimane_study2$ID != 10 & Tsimane_study2$ID != 164), ], Tsimane_study2_outlierm, Tsimane_study2_outlierw)
+Tsimane_study2$men_outlier <- as.factor(Tsimane_study2$men_outlier)
+Tsimane_study2$wife_outlier <- as.factor(Tsimane_study2$wife_outlier)
+Tsimane_study2 <- subset(Tsimane_study2, tot_wives != 0)
+
+```
+
+
+Control variable PCA carried out in SPSS using the folowing code:
+
+
+FACTOR 
+  /VARIABLES weight height biceps tot_wealth 
+  /MISSING LISTWISE 
+  /ANALYSIS weight height biceps tot_wealth 
+  /PRINT INITIAL EXTRACTION ROTATION 
+  /CRITERIA MINEIGEN(1) ITERATE(25) 
+  /EXTRACTION PC 
+  /CRITERIA ITERATE(25) DELTA(0) 
+  /ROTATION OBLIMIN 
+  /SAVE REG(ALL) 
+  /METHOD=CORRELATION.
+  
+  Factors 1 & 2 extracted as 'Size' and Wealth' scores
+  
+  <br>
+  
+```{r tsimane2 PC correlation}
+  cor.test(Tsimane_study2$Size, Tsimane_study2$Wealth)
+
+  cor.test(Tsimane_study2$biceps, Tsimane_study2$height)
+  cor.test(Tsimane_study2$biceps, Tsimane_study2$weight)
+  cor.test(Tsimane_study2$weight, Tsimane_study2$height)
+```
+###### the PCs are not correlated, but all of the components of the size PC are positively, significantly correlated
+
+<br>
+
+Men who had never married were excluded FOLLOWING principal components analysis, as unmarried men still contributed control variable data  
+```{r tsimane2 exclude unmarried}
+Tsimane_study2 <- subset(Tsimane_study2, tot_wives != 0)
+```
+
+<br>
+
+Log-transform men's age at first reproduction
+```{r tsimane2 men first_reprod log-trans}
+Tsimane_study2$log_age_1st_reprod <- log(Tsimane_study2$age_1st_reprod)
+```
+
+<br>
+
+Log-transform wives' number of children, then average if two wives
+```{r tsimane2 women totalchildren log-trans}
+Tsimane_study2$log_w1totalchildren <- log(Tsimane_study2$w1totalchildren + 1)
+Tsimane_study2$log_w2totalchildren <- log(Tsimane_study2$w2totalchildren + 1)
+Tsimane_study2$mean_log_w_totalchildren <- rowMeans(Tsimane_study2[c('log_w1totalchildren', 'log_w2totalchildren')], na.rm=TRUE)
+Tsimane_study2$mean_w_totalchildren <- rowMeans(Tsimane_study2[c('w1totalchildren', 'w2totalchildren')], na.rm=TRUE)
+```
+
+<br>
+
+Log-transform wives' age at first reproduction, then average if two wives
+```{r tsimane2 women first_reprod log-trans}
+Tsimane_study2$log_w1_age_1st_reprod <- log(Tsimane_study2$w1_age_1st_reprod)
+Tsimane_study2$log_w2_age_1st_reprod <- log(Tsimane_study2$w2_age_1st_reprod)
+Tsimane_study2$mean_log_w_age_1st_reprod <- rowMeans(Tsimane_study2[c('log_w1_age_1st_reprod', 'log_w1_age_1st_reprod')], na.rm=TRUE)
+```
+
+<br>
+
+Are the totalchildren data normally distributed? Are the residuals of a regression of total children on age and age^2 normally distributed? 
+```{r, tsimane2 check distributions}
+shapiro.test(Tsimane_study2$totalchildren)
+totalchildren.lm <- residuals(lm(totalchildren ~ poly(age,2), data=Tsimane_study2))
+shapiro.test(totalchildren.lm)
+hist(totalchildren.lm)
+```
+
+##### the total chilren data do not appear to be normally distributed, nor are the residuals of their regression on age and age^2 normally distributed (histogram is of residuals)
+
+<br>
+
+Log-transform men's number of children (+ 1 to account for childless men); run linear regression and extract residuals; add to dataset
+```{r, tsimane2 log residuals}
+Tsimane_study2$log_kids <- log(Tsimane_study2$totalchildren + 1)
+Tsimane_study2$kids_residuals.log.lm <- residuals(lm(log_kids ~ poly(age,2), data=Tsimane_study2, na.action = na.omit))
+```
+
+<br>
+
+Identifying men's age-adjusted rs outliers
+```{r tsimane2 men rs outliers}
+x <- 3
+
+kids_residuals_mean <- mean(Tsimane_study2$kids_residuals.log.lm, na.rm = TRUE)
+kids_residuals_sd <- sd(Tsimane_study2$kids_residuals.log.lm, na.rm = TRUE)
+men_outliers <- as.matrix((rbind(
+  subset(Tsimane_study2, kids_residuals.log.lm <
+                            (kids_residuals_mean - (x * kids_residuals_sd)), select = c(ID, kids_residuals.log.lm)),
+  subset(Tsimane_study2, kids_residuals.log.lm >
+                            (kids_residuals_mean + (x * kids_residuals_sd)), select = c(ID, kids_residuals.log.lm)))))
+men_outliers <- as.data.frame(men_outliers); colnames(men_outliers) <- c("Outliers", "RS")
+print(men_outliers)
+```
+
+###### x = the number of SDs above or below the mean to constitute an outlier
+###### one subjects' age-adjusted RS is more than three SDs below the mean, an analysis excluding this subject can be found in 'Robustness Analyses'
+
+<br>
+
+Create age-adjusted RS variable for wives; second wives' number of children are in a separate column; create dataset combining first and second wives' numbers of children
+```{r tsimane2 create all_wives Poisson totalchildren}
+with_1_wife <- subset(Tsimane_study2, w1age > 0, select = c(ID, w1age, w1totalchildren))
+with_2_wife <- subset(Tsimane_study2, w2age > 0, select = c(ID, w2age, w2totalchildren))
+colnames(with_1_wife) <- c("ID", "age", "totalchildren")
+colnames(with_2_wife) <- c("ID", "age", "totalchildren")
+all_wives <- rbind(with_1_wife, with_2_wife)
+```
+
+<br>
+
+Run linear regresson on wives log-transformed RS to obtain wives' age-adjusted reproductive success; add back into main dataset
+```{r tsimane2 log-transform and run lm all_wives totalchildren}
+all_wives$log_wives_kids <- log(all_wives$totalchildren + 1)
+all_wives<- cbind(all_wives, residuals(lm(log_wives_kids ~ poly(age,2), data = all_wives)))
+all_wives$wives_residuals.log.lm <-  all_wives[,5]; all_wives <- all_wives[,-5]
+wives_residuals.log <- aggregate(log_wives_kids ~ ID, all_wives, mean, all.x = TRUE)
+wives_residuals.log.lm <- aggregate(wives_residuals.log.lm ~ ID, all_wives, mean, all.x = TRUE)
+Tsimane_study2 <- merge(Tsimane_study2, by="ID", wives_residuals.log.lm, all.x = TRUE)
+Tsimane_study2 <- merge(Tsimane_study2, by="ID", wives_residuals.log, all.x = TRUE)
+rm(wives_residuals.log.lm)
+```
+
+<br>
+
+Identifying wives' age-adjusted rs outliers
+```{r tsimane2 wives rs outliers}
+y <- 3
+wives_residuals_mean <- mean(all_wives$wives_residuals.log.lm, na.rm = TRUE)
+wives_residuals_sd <- sd(all_wives$wives_residuals.log.lm, na.rm = TRUE)
+wives_outliers <- rbind(
+    subset(all_wives, wives_residuals.log.lm <
+             (wives_residuals_mean - (y * wives_residuals_sd)), select = c(ID, wives_residuals.log.lm)),
+    subset(all_wives, wives_residuals.log.lm >
+             (wives_residuals_mean + (y * wives_residuals_sd)), select = c(ID, wives_residuals.log.lm)))
+wives_outliers <- as.data.frame(wives_outliers); colnames(wives_outliers) <- c("Outliers", "RS")
+print(wives_outliers)
+```
+###### y = the number of SDs above or below the mean to constitute an outlier
+###### the outlier column refers to the ID number of the husband
+###### two wives' age-adjusted RS is more than three SDs below the mean; an analysis excluding these wives can be found in 'Robustness Analyses'
+
+<br>
+
+Preview of study data after transformations
+```{r tsimane2 head}
+head(Tsimane_study2)
+```
+
+<br>
+
+Are there overall inter-village differences in men's mean F0, RS, or control variables?
+```{r tsimane2 MANOVA}
+manova1 <- manova(cbind(curr_Wives, tot_wives, prop_kids_died, log_age_1st_reprod, mean_log_w_age_1st_reprod,
+                     wives_residuals.log.lm, kids_residuals.log.lm, meanF0, Size, Wealth)~ village, data = Tsimane_study2)
+
+summary(manova1)
+```
+###### village ID does not predict overal differences in subject-level variables
+
+<br>
+
+Are there specific inter-village differences in men's mean F0, RS, or control variables?
+```{r tsimane2 MANOVA.aov}
+summary.aov(manova1)
+```
+###### propoirtion of offspring that died before age 16 differs significantly between villages
+###### fundamental frequency differs significantly between villages
+
+<br>
+
+Zero-order correlation table including men's mean F0 and all dependent and control variables
+```{r tsimane2 correlations, warning=FALSE}
+attach(Tsimane_study2)
+cor_data <- as.data.frame(qpcR:::cbind.na(meanF0, curr_Wives, tot_wives, prop_kids_died, age, Wealth, Size, mean_log_w_age_1st_reprod, log_age_1st_reprod, log_kids, mean_log_w_totalchildren))
+F0_cor <- corr.test(cor_data, adjust = "holm")
+F0_cor <- round(as.data.frame(cbind(F0_cor$n[2:11,1], F0_cor$ci$lower[1:10], F0_cor$r[2:11,1], F0_cor$ci$upper[1:10], F0_cor$p[2:11,1])), 3)
+colnames(F0_cor) <- c("N", "95% lower limit", "Pearson's R", "95% upper limit", "p-Value")
+rownames(F0_cor) <- c("Current wives", "Total wives", "Offspring died under age 16 (%)", "Age", "Wealth", "Size", "Log wives' age at first reproduction", "Log age at first reproduction", "Log-transformed RS", "Wives' age-adjusted RS")
+print(F0_cor)
+
+```
+###### F0 is significantly, and negatively, correlated with men's and wives' log-transformed reproductive success, but no other variable
+
+<br>
+
+#### Linear models testing whether men's mean fundamental frequency predicts aspects of reproductive success, controlling for size, wealth, age, and age^2
+
+<br>
+
+```{r tsimane2 lm, warning=FALSE}
+tsimane2_currwives_lm <- lm(curr_Wives~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_totwives_lm <- lm(tot_wives~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_propdied_lm <- lm(prop_kids_died~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_age1st_lm <- lm(log_age_1st_reprod~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_w_age1st_lm <- lm(mean_log_w_age_1st_reprod~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_logkids_lm <- lm(log_kids~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+tsimane2_w_RS_lm <- lm(wives_residuals.log.lm~ meanF0 + Size + Wealth + poly(age,2), data=Tsimane_study2, na.action = na.omit)
+Tsimane_study2.stand.betas <- as.data.frame(c(lm.beta(tsimane2_currwives_lm)[1],lm.beta(tsimane2_totwives_lm)[1], lm.beta(tsimane2_propdied_lm)[1],lm.beta(tsimane2_age1st_lm)[1],lm.beta(tsimane2_w_age1st_lm)[1],lm.beta(tsimane2_logkids_lm)[1],lm.beta(tsimane2_w_RS_lm)[1]))
+colnames(Tsimane_study2.stand.betas) <- "beta"
+```
+
+<br>
+
+```{r, tsimane2 model_table}
+model_table <- t(round(as.data.frame(cbind(summary(tsimane2_currwives_lm)$coefficients[2,c(3,4)],summary(tsimane2_totwives_lm)$coefficients[2,c(3,4)], summary(tsimane2_propdied_lm)$coefficients[2,c(3,4)], summary(tsimane2_age1st_lm)$coefficients[2,c(3,4)], summary(tsimane2_w_age1st_lm)$coefficients[2,c(3,4)], summary(tsimane2_logkids_lm)$coefficients[2,c(3,4)], summary(tsimane2_w_RS_lm)$coefficients[2,c(3,4)])), 3))
+
+rownames(model_table) <- c("Current wives", "Total wives", "Offspring mortality", "Age at 1st reproduction", "Wives' age at 1st reproduction", "Log number of offspring", "Wives' age-adjusted RS")
+
+colnames(model_table) <- c("t stat", "p-value")
+
+model_table <- cbind(Tsimane_study2.stand.betas, model_table)
+
+print(model_table)
+```
+
+<br>
+
+```{r tsimane2 figure3, warning=FALSE}
+Tsimane_study2_fig <- subset(Tsimane_study2, is.na(meanF0) == FALSE)
+Tsimane_study2_fig$tsimane2_meanF0_residuals <- residuals(lm(meanF0~ Size + Wealth + poly(age,2), data=Tsimane_study2_fig, na.action = na.omit))
+
+F0_rs_fig <- ggplot(Tsimane_study2, aes(x=meanF0, y=log_kids, shape = men_outlier, shape = men_outlier)) + geom_point() + geom_smooth(method=lm) +
+  annotate(geom="text", x=140, y=0.25, label="r = -0.29, p = 0.025") + labs(x="", y = "Log-transformed RS") + theme(legend.position="none")
+
+F0adj_rs_fig <- ggplot(Tsimane_study2_fig, aes(x=tsimane2_meanF0_residuals, y=log_kids, shape = men_outlier, shape = men_outlier)) + geom_point() +
+  geom_smooth(method=lm) + annotate(geom="text", x=12.0, y=0.25, label="β = -0.14, t = -1.67, p = 0.100") + labs(x="", y = "") +
+  theme(legend.position="none")
+  
+F0_w_rs_fig <- ggplot(Tsimane_study2, aes(x=meanF0, y=wives_residuals.log.lm, shape = wife_outlier, shape = wife_outlier)) + geom_point() + geom_smooth(method=lm) +
+  annotate(geom="text", x=140, y=-0.75, label="r = -0.31, p = 0.023") + labs(x="Mean fundamental frequency", y = "Wives' age-adjusted RS") +
+  theme(legend.position="none")
+  
+F0adj_w_rs_fig <- ggplot(Tsimane_study2_fig, aes(x=tsimane2_meanF0_residuals, y=wives_residuals.log.lm, shape = wife_outlier, shape = wife_outlier)) + geom_point() +
+  geom_smooth(method=lm) + annotate(geom="text", x=5.0, y=-0.6, label="β = -0.27, t = -1.90, p = 0.064") +
+  labs(x="Residuals of regressing\nMean F0 on covariates", y = "") + theme(legend.position="none")
+  
+
+grid.arrange(F0_rs_fig, F0adj_rs_fig, F0_w_rs_fig, F0adj_w_rs_fig, nrow=2, top="Subjects' mean fundamental frequency
+             plotted against own and wives' reproductive success")
+```
